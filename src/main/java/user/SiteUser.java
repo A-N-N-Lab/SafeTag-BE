@@ -32,4 +32,10 @@ public class SiteUser {
 
     @Column(unique = true, nullable = false)
     private String phoneNum;
+
+    @Column(unique = true, nullable = true)
+    private String carNumber;
+
+    @Column(nullable = true)
+    private String apartmentInfo;
 }

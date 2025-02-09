@@ -5,7 +5,7 @@ import java.util.Optional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-import com.mysite.sbb.DataNotFoundException;
+import com.example.safetag.DataNotFoundException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -34,5 +34,19 @@ public class UserService {
         } else {
             throw new DataNotFoundException("siteuser not found");
         }
+    }
+
+    public SiteUser updateUser(String username, String email, String password, String gender, String phoneNum, String carNumber, String apartmentInfo) {
+        SiteUser user = getUser(username);
+        user.setEmail(email);
+        if (password != null && !password.isEmpty()) {
+            user.setPassword(passwordEncoder.encode(password));
+        }
+        user.setGender(gender);
+        user.setPhoneNum(phoneNum);
+        user.setCarNumber(carNumber);
+        user.setApartmentInfo(apartmentInfo);
+        this.userRepository.save(user);
+        return user;
     }
 }
