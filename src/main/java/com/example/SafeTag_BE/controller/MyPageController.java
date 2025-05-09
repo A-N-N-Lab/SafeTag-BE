@@ -19,9 +19,7 @@ public class MyPageController {
 
     private final UserService userService;
 
-    /**
-     * 🔥 마이페이지 정보 조회 API
-     */
+    //마이페이지 정보 조회 API
     @GetMapping("")
     @Operation(summary = "마이페이지 조회", description = "현재 로그인한 사용자의 마이페이지 정보를 조회합니다.")
     public ResponseEntity<SiteUser> myPageView(Principal principal) {
@@ -29,9 +27,7 @@ public class MyPageController {
         return ResponseEntity.ok(user);
     }
 
-    /**
-     * 🔥 마이페이지 정보 수정 Form 데이터 로드
-     */
+    //마이페이지 정보 수정 Form 데이터 로드
     @GetMapping("/edit")
     @Operation(summary = "마이페이지 수정 폼 데이터", description = "마이페이지 수정 폼에 기존 데이터를 로드합니다.")
     public ResponseEntity<MyPageUpdateDto> myPageForm(Principal principal) {
@@ -46,9 +42,7 @@ public class MyPageController {
         return ResponseEntity.ok(form);
     }
 
-    /**
-     * 🔥 마이페이지 정보 수정 API
-     */
+    //마이페이지 정보 수정 API
     @PutMapping("/edit")
     @Operation(summary = "마이페이지 수정", description = "마이페이지 정보를 수정합니다.")
     public ResponseEntity<String> updateMyPage(@RequestBody MyPageUpdateDto myPageUpdateForm, Principal principal) {

@@ -17,9 +17,7 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /**
-     * 🔥 회원가입
-     */
+    //회원가입
     public SiteUser create(String username, String email, String password, String gender, String phoneNum) {
         SiteUser user = new SiteUser();
         user.setUsername(username);
@@ -31,9 +29,7 @@ public class UserService {
         return user;
     }
 
-    /**
-     * 🔥 사용자 정보 가져오기
-     */
+    //사용자 정보 가져오기
     public SiteUser getUser(String username) {
         Optional<SiteUser> siteUser = this.userRepository.findByUsername(username);
         if (siteUser.isPresent()) {
@@ -43,9 +39,7 @@ public class UserService {
         }
     }
 
-    /**
-     * 🔥 회원정보 수정
-     */
+    //회원정보 수정
     public SiteUser updateUser(String username, String email, String password, String gender, String phoneNum, String carNumber, String apartmentInfo) {
         SiteUser user = getUser(username);
         user.setEmail(email);
@@ -60,9 +54,7 @@ public class UserService {
         return user;
     }
 
-    /**
-     * 🔥 로그인
-     */
+    //로그인
     public UserResponseDto login(String username, String password) {
         Optional<SiteUser> optionalUser = userRepository.findByUsername(username);
 
