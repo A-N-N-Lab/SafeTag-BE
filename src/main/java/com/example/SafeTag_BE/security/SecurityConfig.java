@@ -1,4 +1,4 @@
-package com.example.SafeTag_BE.config;
+package com.example.SafeTag_BE.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
