@@ -11,6 +11,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
+import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter.XFrameOptionsMode;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
@@ -19,14 +20,32 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		http.authorizeHttpRequests((authorizeHttpRequests) -> authorizeHttpRequests
-				.requestMatchers(new AntPathRequestMatcher("/**")).permitAll())
-				.csrf((csrf) -> csrf.ignoringRequestMatchers(new AntPathRequestMatcher("/h2-console/**")))
-				.headers((headers) -> headers.addHeaderWriter(
-						new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)))
-				.formLogin((formLogin) -> formLogin.loginPage("/com/example/safetag/service/login").defaultSuccessUrl("/"))
-				.logout((logout) -> logout.logoutRequestMatcher(new AntPathRequestMatcher("/com/example/safetag/service/logout"))
-						.logoutSuccessUrl("/").invalidateHttpSession(true));
+		http.authorizeHttpRequests(authz -> authz
+				.requestMatchers("/api/qrs/**").permitAll()
+				.requestMatchers("/h2-console/**").permitAll()
+				.anyRequest().authenticated()
+				)
+				.csrf(csrf -> csrf
+						.ignoringRequestMatchers(
+								new AntPathRequestMatcher("/h2-console/**"),
+								new AntPathRequestMatcher("/api/qrs/**")
+						)
+				)
+				.headers(headers -> headers
+						.addHeaderWriter(
+								new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN)
+						)
+				)
+				.formLogin(form -> form
+						.loginPage("/com/example/safetag/service/login")
+						.defaultSuccessUrl("/")
+				)
+				.logout(logout -> logout
+						.logoutRequestMatcher(new AntPathRequestMatcher("/com/example/safetag/service/logout"))
+						.logoutSuccessUrl("/")
+						.invalidateHttpSession(true)
+				);
+
 		return http.build();
 	}
 
