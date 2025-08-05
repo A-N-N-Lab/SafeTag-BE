@@ -4,8 +4,6 @@ import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import com.example.SafeTag_BE.security.JwtTokenProvider;
-
 
 import java.security.Key;
 import java.util.Date;
@@ -13,40 +11,75 @@ import java.util.Date;
 @Slf4j
 @Component
 public class JwtTokenProvider {
-    private final String SECRET_KEY = "safetagSecretKeyForJwtAuthentication";
-    private final long EXPIRATION_TIME = 1000 * 60 * 60; // 1시간
+
+    private static final String SECRET_KEY = "safetagSecretKeyForJwtAuthentication";
+    private static final long EXPIRATION_TIME = 1000 * 60 * 60; // 1시간
 
     private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
 
-    // JWT 생성
-    public String generateToken(String username) {
+    //JWT 생성
+    public String generateToken(Long id, String role) {
+        Claims claims = Jwts.claims().setSubject(String.valueOf(id));
+        claims.put("role", role); // "ROLE_USER" or "ROLE_ADMIN"
+
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + EXPIRATION_TIME);
+
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
+                .setClaims(claims)
+                .setIssuedAt(now)
+                .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // JWT 검증
+    //JWT 유효성 검증
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
+            getParser().parseClaimsJws(token);
             return true;
-        } catch (Exception e) {
-            log.error("Invalid JWT token: {}", e.getMessage());
-            return false;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT expired: {}", e.getMessage());
+        } catch (UnsupportedJwtException e) {
+            log.warn("Unsupported JWT: {}", e.getMessage());
+        } catch (MalformedJwtException e) {
+            log.warn("Malformed JWT: {}", e.getMessage());
+        } catch (SecurityException | IllegalArgumentException e) {
+            log.warn("Invalid JWT signature or claims: {}", e.getMessage());
         }
+        return false;
     }
 
-    // JWT에서 사용자명 추출
-    public String getUsernameFromToken(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
+    //JWT에서 사용자 ID(회원번호)추출
+    public Long getUserIdFromToken(String token) {
+        String subject = getParser()
                 .parseClaimsJws(token)
                 .getBody()
                 .getSubject();
-    }
-}
 
+        return Long.parseLong(subject);
+    }
+
+    //JWT에서 역할 추출
+    public String getRoleFromToken(String token) {
+        return getParser()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("role", String.class); // "ROLE_USER" or "ROLE_ADMIN"
+    }
+
+    //공통 ParserBuilder
+    private JwtParser getParser() {
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build();
+    }
+
+    public String getUsernameFromToken(String token) {
+        return getParser()
+                .parseClaimsJws(token)
+                .getBody()
+                .get("username", String.class);
+    }
+
+}

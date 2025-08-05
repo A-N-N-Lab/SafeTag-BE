@@ -7,12 +7,12 @@ import java.time.LocalDate;
 
 @Getter
 @AllArgsConstructor
-public class UserResponseDto {
+public class AdminResponseDto {
     private Long id;
     private String name;
     private String username;
     private String phoneNum;
     private LocalDate birthDate;
     private String gender;
-    private String address;
+    private String company;
 }
