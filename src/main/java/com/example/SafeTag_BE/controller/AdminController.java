@@ -85,20 +85,21 @@ public class AdminController {
     // 관리자 탈퇴
     @DeleteMapping("/delete")
     @Operation(summary = "관리자 탈퇴", description = "현재 로그인한 관리자의 계정을 삭제합니다.")
-    public ResponseEntity<String> deleteAdmin(Principal principal,
-                                              @RequestHeader("Authorization") String token) {
-        String role = jwtTokenProvider.getRoleFromToken(token.replace("Bearer ", ""));
+    public ResponseEntity<String> deleteAdmin(@RequestHeader("Authorization") String token) {
+        token = token.replace("Bearer ", "");
+        String role = jwtTokenProvider.getRoleFromToken(token);
+        Long adminId = jwtTokenProvider.getUserIdFromToken(token);
+
         if (!"ROLE_ADMIN".equals(role)) {
             return ResponseEntity.badRequest().body("관리자만 탈퇴할 수 있습니다.");
         }
 
         try {
-            String username = principal.getName();
-            Admin admin = adminService.getAdminByUsername(username);
-            adminService.deleteAdmin(admin.getId());
+            adminService.deleteAdmin(adminId);
             return ResponseEntity.ok("관리자 탈퇴 성공");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("관리자 탈퇴 실패: " + e.getMessage());
         }
     }
+
 }

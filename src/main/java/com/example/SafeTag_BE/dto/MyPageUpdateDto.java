@@ -15,10 +15,6 @@ public class MyPageUpdateDto {
     @NotEmpty(message = "이름은 필수항목입니다.")
     private String name;
 
-    @NotEmpty(message = "이메일은 필수항목입니다.")
-    @Email(message = "올바른 이메일 형식을 입력해주세요.")
-    private String email;
-
     private String password;
 
     @NotEmpty(message = "성별은 필수 선택 항목입니다.")
