@@ -1,6 +1,6 @@
 package com.example.SafeTag_BE.security;
 
-import com.example.SafeTag_BE.service.UserSecurityService;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,9 +27,12 @@ public class SecurityConfig {
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http
+
 				.csrf(csrf -> csrf.disable())
+				.cors(cors->{})
 				.sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
+						.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
 						.requestMatchers(
 								"/api/auth/login",
 								"/api/user/signup",
@@ -47,6 +50,24 @@ public class SecurityConfig {
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
+	}
+
+	// 로컬 개발용 CORS 허용
+	@Bean
+	public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+		var c = new org.springframework.web.cors.CorsConfiguration();
+		c.setAllowedOrigins(java.util.List.of(
+				"http://localhost:5173",
+				"http://127.0.0.1:5173"
+		));
+		c.setAllowedMethods(java.util.List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+		c.setAllowedHeaders(java.util.List.of("Authorization","Content-Type"));
+		c.setExposedHeaders(java.util.List.of("Authorization"));
+		c.setAllowCredentials(true);
+
+		var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", c);
+		return source;
 	}
 
 	@Bean
