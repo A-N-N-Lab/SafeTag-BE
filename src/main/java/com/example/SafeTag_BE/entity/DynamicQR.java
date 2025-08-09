@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import com.example.SafeTag_BE.entity.User;
 
 @Entity
 @Data
@@ -34,6 +35,6 @@ public class DynamicQR {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
-    private SiteUser user;
+    private User user;
 
 }

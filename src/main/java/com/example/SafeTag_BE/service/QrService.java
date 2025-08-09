@@ -4,7 +4,7 @@ package com.example.SafeTag_BE.service;
 import com.example.SafeTag_BE.dto.CreateQrRequestDto;
 import com.example.SafeTag_BE.dto.QrResponseDto;
 import com.example.SafeTag_BE.entity.DynamicQR;
-import com.example.SafeTag_BE.entity.SiteUser;
+import com.example.SafeTag_BE.entity.User;
 import com.example.SafeTag_BE.repository.DynamicQRRepository;
 import com.example.SafeTag_BE.repository.UserRepository;
 import com.google.zxing.BarcodeFormat;
@@ -29,7 +29,7 @@ public class QrService {
         String qrValue = UUID.randomUUID().toString();
         LocalDateTime now = LocalDateTime.now();
 
-        SiteUser user = userRepository.findById(dto.getUserId())
+        User user = userRepository.findById(dto.getUserId())
                 .orElseThrow(()->new IllegalArgumentException("해당 사용자가 존재하지 않습니다."));
 
         DynamicQR qr = DynamicQR.builder()
@@ -48,31 +48,36 @@ public class QrService {
         );
     }
 
-    public byte[] generateQrImage(String qrValue) throws Exception{
-        QRCodeWriter qrCodeWriter= new QRCodeWriter();
-        BitMatrix bitMatrix = qrCodeWriter.encode(qrValue, BarcodeFormat.QR_CODE,250,250);
+    //  QR 이미지 생성
+    public byte[] generateQrImage(String qrValue) throws Exception {
+        QRCodeWriter qrCodeWriter = new QRCodeWriter();
+        BitMatrix bitMatrix = qrCodeWriter.encode(qrValue, BarcodeFormat.QR_CODE, 250, 250);
 
         ByteArrayOutputStream pngOutputStream = new ByteArrayOutputStream();
-        MatrixToImageWriter.writeToStream(bitMatrix,"PNG",pngOutputStream);
+        MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
         return pngOutputStream.toByteArray();
     }
+
+    //  QR 조회 by ID
     public DynamicQR getQrById(Long qrId) {
         return qrRepository.findById(qrId)
                 .orElseThrow(() -> new IllegalArgumentException("QR ID 없음"));
     }
 
-    public String getProxyPhoneNumber(String qrValue){
+    // 마스킹된 전화번호 조회
+    public String getProxyPhoneNumber(String qrValue) {
         DynamicQR qr = qrRepository.findByQrValue(qrValue)
-                .orElseThrow(()-> new IllegalArgumentException("QR값이 유효하지 않음"));
-        if(qr.getExpiredAt().isBefore(LocalDateTime.now())){
+                .orElseThrow(() -> new IllegalArgumentException("QR값이 유효하지 않음"));
+
+        if (qr.getExpiredAt().isBefore(LocalDateTime.now())) {
             throw new IllegalStateException("QR이 만료되었습니다.");
         }
-        SiteUser user = qr.getUser();
 
-        // 실제로는 전화중계 서버로 연결 ( 현재는 마스킹된 번호 반환)
-        String maksedPhone = user.getPhoneNum().replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1-****-$2");
-        return maksedPhone;
+        User user = qr.getUser();
+
+        // 전화번호 마스킹 (예: 010-****-5678)
+        String maskedPhone = user.getPhoneNum().replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1-****-$2");
+        return maskedPhone;
     }
-
 
 }

@@ -1,6 +1,7 @@
 package com.example.SafeTag_BE.security;
 
-import com.beust.ah.A;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -8,51 +9,74 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.header.writers.frameoptions.XFrameOptionsHeaderWriter;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+	private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http
+
+				.csrf(csrf -> csrf.disable())
+				.cors(cors->{})
+				.sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers(new AntPathRequestMatcher("/**")).permitAll()
+						.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+						.requestMatchers(
+								"/api/auth/login",
+								"/api/user/signup",
+								"/api/admin/signup",
+								"/swagger-ui/**",
+								"/swagger-ui.html",
+								"/v3/api-docs/**",
+								"/h2-console/**"
+						).permitAll()
+						.anyRequest().authenticated()
 				)
-				.csrf(csrf -> csrf
-						.ignoringRequestMatchers(
-								new AntPathRequestMatcher("/h2-console/**"),
-								new AntPathRequestMatcher("/api/user/signup") // ✅ CSRF 예외 추가
-						)
+				.headers(headers -> headers
+						.addHeaderWriter(new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN))
 				)
-				.headers(headers -> headers.addHeaderWriter(
-						new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN))
-				)
-				.formLogin(formLogin -> formLogin
-						.loginPage("/com/example/safetag/service/login")
-						.defaultSuccessUrl("/")
-				)
-				.logout(logout -> logout
-						.logoutRequestMatcher(new AntPathRequestMatcher("/com/example/safetag/service/logout"))
-						.logoutSuccessUrl("/")
-						.invalidateHttpSession(true)
-				);
+				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
 		return http.build();
 	}
 
+	// 로컬 개발용 CORS 허용
 	@Bean
-	PasswordEncoder passwordEncoder() {
+	public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+		var c = new org.springframework.web.cors.CorsConfiguration();
+		c.setAllowedOrigins(java.util.List.of(
+				"http://localhost:5173",
+				"http://127.0.0.1:5173"
+		));
+		c.setAllowedMethods(java.util.List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
+		c.setAllowedHeaders(java.util.List.of("Authorization","Content-Type"));
+		c.setExposedHeaders(java.util.List.of("Authorization"));
+		c.setAllowCredentials(true);
+
+		var source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/**", c);
+		return source;
+	}
+
+	@Bean
+	public PasswordEncoder passwordEncoder() {
 		return new BCryptPasswordEncoder();
 	}
 
 	@Bean
-	AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
-			throws Exception {
-		return authenticationConfiguration.getAuthenticationManager();
+	public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+		return configuration.getAuthenticationManager();
 	}
 }
