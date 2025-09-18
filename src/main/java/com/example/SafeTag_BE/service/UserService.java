@@ -1,7 +1,7 @@
 package com.example.SafeTag_BE.service;
 
 import com.example.SafeTag_BE.entity.User;
-import com.example.SafeTag_BE.exception.DataNotFoundException;
+import com.example.SafeTag_BE.exception.ApiException;
 import com.example.SafeTag_BE.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,13 +36,13 @@ public class UserService {
     // 사용자 ID(고유번호)로 조회
     public User getUser(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new DataNotFoundException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException("NOT_FOUND","사용자를 찾을 수 없습니다."));
     }
 
     // 사용자 username으로 조회
     public User getUserByUsername(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new DataNotFoundException("사용자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException("NOT_FOUND","사용자를 찾을 수 없습니다."));
     }
 
     // 회원정보 수정

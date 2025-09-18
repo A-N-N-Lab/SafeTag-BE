@@ -25,14 +25,14 @@ public class AuthController {
         //일반 사용자 로그인 시도
         User user = userService.login(loginRequest.getUsername(), loginRequest.getPassword());
         if (user != null) {
-            String token = jwtTokenProvider.generateToken(user.getId(), user.getRole());
+            String token = jwtTokenProvider.generateToken(user.getId(), user.getRole(),user.getUsername());
             return ResponseEntity.ok(new LoginResponseDto(token, "Bearer"));
         }
 
         //관리자 로그인 시도
         Admin admin = adminService.login(loginRequest.getUsername(), loginRequest.getPassword());
         if (admin != null) {
-            String token = jwtTokenProvider.generateToken(admin.getId(), admin.getRole());
+            String token = jwtTokenProvider.generateToken(admin.getId(), admin.getRole(),user.getUsername());
             return ResponseEntity.ok(new LoginResponseDto(token, "Bearer"));
         }
 

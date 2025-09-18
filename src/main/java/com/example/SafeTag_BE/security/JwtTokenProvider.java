@@ -18,9 +18,10 @@ public class JwtTokenProvider {
     private final Key key = Keys.hmacShaKeyFor(SECRET_KEY.getBytes());
 
     //JWT 생성
-    public String generateToken(Long id, String role) {
+    public String generateToken(Long id, String role, String username) {
         Claims claims = Jwts.claims().setSubject(String.valueOf(id));
-        claims.put("role", role); // "ROLE_USER" or "ROLE_ADMIN"
+        claims.put("role", role);      // "ROLE_USER" or "ROLE_ADMIN"
+        claims.put("username", username);
 
         Date now = new Date();
         Date expiry = new Date(now.getTime() + EXPIRATION_TIME);

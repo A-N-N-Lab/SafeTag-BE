@@ -56,3 +56,9 @@ logs/
 # Lombok config
 lombok.config
 
+
+__pycache__/
+*.pyc
+*.pyo
+*.env
+Chatbot/.env
