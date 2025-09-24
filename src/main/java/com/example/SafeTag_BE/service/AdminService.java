@@ -1,7 +1,7 @@
 package com.example.SafeTag_BE.service;
 
 import com.example.SafeTag_BE.entity.Admin;
-import com.example.SafeTag_BE.exception.DataNotFoundException;
+import com.example.SafeTag_BE.exception.ApiException;
 import com.example.SafeTag_BE.repository.AdminRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -36,13 +36,13 @@ public class AdminService {
     // 관리자 ID(고유번호)로 조회
     public Admin getAdmin(Long id) {
         return adminRepository.findById(id)
-                .orElseThrow(() -> new DataNotFoundException("관리자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException("NOT_FOUND","관리자를 찾을 수 없습니다."));
     }
 
     // 관리자 username으로 조회
     public Admin getAdminByUsername(String username) {
         return adminRepository.findByUsername(username)
-                .orElseThrow(() -> new DataNotFoundException("관리자를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ApiException("NOT_FOUND","관리자를 찾을 수 없습니다."));
     }
 
     // 관리자 정보 수정
