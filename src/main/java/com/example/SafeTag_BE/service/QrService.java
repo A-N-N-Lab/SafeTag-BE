@@ -13,6 +13,7 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -79,5 +80,19 @@ public class QrService {
         String maskedPhone = user.getPhoneNum().replaceAll("(\\d{3})\\d{4}(\\d{4})", "$1-****-$2");
         return maskedPhone;
     }
+    public Map<String, Object> validate(String code) {
+        DynamicQR qr = qrRepository.findByQrValue(code)
+                .orElseThrow(() -> new IllegalArgumentException("NOT_FOUND"));
+
+        if (qr.getExpiredAt() != null && qr.getExpiredAt().isBefore(LocalDateTime.now())) {
+            return Map.of("valid", false, "reason", "EXPIRED");
+        }
+        return Map.of(
+                "valid", true,
+                "ownerId", qr.getUser().getId(),
+                "qrId", qr.getId()
+        );
+    }
+
 
 }

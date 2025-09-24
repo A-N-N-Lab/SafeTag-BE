@@ -5,6 +5,7 @@ import com.example.SafeTag_BE.entity.DynamicQR;
 import com.example.SafeTag_BE.service.QrService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -55,5 +56,18 @@ public class QrController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
+
+    @Operation(summary = "QR 유효성 확인", description = "QR code 문자열로 유효성/만료를 확인합니다.")
+    @GetMapping("/{code}")
+    public ResponseEntity<?> validateByCode(@PathVariable String code) {
+        try {
+            return ResponseEntity.ok(qrService.validate(code));
+        } catch (IllegalArgumentException e) {
+            // NOT_FOUND 등
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(Map.of("valid", false, "reason", e.getMessage()));
+        }
+    }
+
 
 }
