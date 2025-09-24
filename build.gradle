@@ -1,24 +1,14 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '3.4.2'
-	id 'io.spring.dependency-management' version '1.1.7'
+	id 'org.springframework.boot' version '3.3.6'
+	id 'io.spring.dependency-management' version '1.1.6'
 }
 
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(17)
-	}
-}
-sourceCompatibility = '17'
-targetCompatibility = '17'
-
-configurations {
-	compileOnly {
-		extendsFrom annotationProcessor
-	}
+	toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
 
 repositories {
@@ -27,36 +17,28 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
-
-	compileOnly 'org.projectlombok:lombok'
-
-//implementation 'org.springframework.boot:spring-boot-starter-webflux'
-
-	runtimeOnly 'com.mysql:mysql-connector-j'
-	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
-
 
 	// Data
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	runtimeOnly   'com.mysql:mysql-connector-j'
 
-	// Security / JWT
+	// Security / Thymeleaf (필요시)
 	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+	implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
 
+	// JWT
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.11.5'
 
-	// Docs (Swagger UI)
+	// Swagger / OpenAPI
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
 
-	// Optional (실제로 쓸 때만 유지)
+	// Optional
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'com.google.firebase:firebase-admin:9.2.0'
 	implementation 'com.google.zxing:core:3.5.1'
@@ -66,10 +48,8 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok:1.18.32'
 	annotationProcessor 'org.projectlombok:lombok:1.18.32'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-
-
 }
 
-tasks.named('test') {
+tasks.withType(Test).configureEach {
 	useJUnitPlatform()
 }
