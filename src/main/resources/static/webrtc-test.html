@@ -1,0 +1,124 @@
+<!--이거 나중에 삭제할거야 프론트 코드 잠시만 해두는 거 -->
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <title>SafeTag WebRTC 빠른 테스트</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    video { width: 45%; background: #000; margin-right: 10px; }
+    .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+    button { padding: 8px 12px; }
+    input { padding: 6px 8px; width: 280px; }
+    pre { background:#111; color:#0f0; padding:8px; height:120px; overflow:auto; }
+  </style>
+</head>
+<body>
+<h2>SafeTag WebRTC 빠른 테스트</h2>
+
+<div class="row">
+  <label>Session ID:</label>
+  <input id="sid" value="test-123" />
+  <button id="callerBtn">Start as Caller</button>
+  <button id="calleeBtn">Start as Callee</button>
+  <button id="hangupBtn">Hang Up</button>
+</div>
+
+<div class="row">
+  <video id="local" autoplay playsinline muted></video>
+  <video id="remote" autoplay playsinline></video>
+</div>
+
+<pre id="log"></pre>
+
+<script>
+  (() => {
+    const el = (id) => document.getElementById(id);
+    const log = (...a) => { el('log').textContent += a.join(' ') + "\n"; };
+
+    let pc, ws, localStream;
+
+    async function getIceConfig() {
+      const res = await fetch('/api/ice-config');
+      if (!res.ok) throw new Error('ice-config fail ' + res.status);
+      return res.json(); // { iceServers: [...] }
+    }
+
+    async function start(role) {
+      const sessionId = el('sid').value.trim();
+      if (!sessionId) { alert('Session ID 입력'); return; }
+
+      // 1) ICE 서버 받기
+      const ice = await getIceConfig();
+      log('ICE:', JSON.stringify(ice));
+
+      // 2) RTCPeerConnection 준비
+      pc = new RTCPeerConnection(ice);
+      pc.onicecandidate = (e) => {
+        if (e.candidate) send({ type: 'ice', sessionId, candidate: e.candidate });
+      };
+      pc.ontrack = (e) => { el('remote').srcObject = e.streams[0]; };
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+      localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+      el('local').srcObject = localStream;
+
+      // 3) WebSocket 연결
+      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+      ws = new WebSocket(`${wsProto}://${location.host}/ws/signaling`);
+      ws.onopen = async () => {
+        log('WS opened');
+        send({ type: 'join', sessionId });
+        if (role === 'caller') {
+          // Caller는 offer 생성/전송
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          send({ type: 'offer', sessionId, sdp: offer });
+          log('sent offer');
+        } else {
+          log('joined as callee, waiting offer...');
+        }
+      };
+      ws.onmessage = async (evt) => {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === 'offer') {
+          log('recv offer');
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          send({ type: 'answer', sessionId, sdp: answer });
+          log('sent answer');
+        } else if (msg.type === 'answer') {
+          log('recv answer');
+          await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+        } else if (msg.type === 'ice' && msg.candidate) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            // log('add ice');
+          } catch (e) { log('ice err', e.toString()); }
+        } else if (msg.type === 'ack' || msg.type === 'error') {
+          log('server:', JSON.stringify(msg));
+        }
+      };
+      ws.onclose = () => log('WS closed');
+      ws.onerror = (e) => log('WS error', e.message || e.toString());
+    }
+
+    function send(m) { try { ws && ws.readyState===1 && ws.send(JSON.stringify(m)); } catch(e){} }
+
+    async function hangup() {
+      const sessionId = el('sid').value.trim();
+      try { send({ type:'leave', sessionId }); } catch(e){}
+      try { ws && ws.close(); } catch(e){}
+      if (pc) { pc.getSenders().forEach(s => s.track && s.track.stop()); pc.close(); }
+      if (localStream) { localStream.getTracks().forEach(t=>t.stop()); }
+      pc = ws = localStream = null;
+      log('hangup done');
+    }
+
+    el('callerBtn').onclick = () => start('caller');
+    el('calleeBtn').onclick = () => start('callee');
+    el('hangupBtn').onclick = () => hangup();
+  })();
+</script>
+</body>
+</html>
