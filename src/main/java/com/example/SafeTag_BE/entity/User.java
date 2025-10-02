@@ -31,6 +31,9 @@ public class User {
     @Column(nullable = false)
     private String gender;
 
+    @Column(nullable = true)
+    private String carNumber;
+
     @Column(nullable = false)
     private String address;
 
