@@ -6,13 +6,11 @@ from openai import OpenAI
 import httpx, json
 from PIL import Image
 import pytesseract
-import io
-import os
+import io, os
 
-
-
+# (선택) .env 로드
 try:
-    from dotenv import load_dotenv  # pip install python-dotenv
+    from dotenv import load_dotenv
     load_dotenv()
 except Exception:
     pass
@@ -21,50 +19,47 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     raise RuntimeError("OPENAI_API_KEY is not set in environment variables.")
 
-
+# OpenAI 클라이언트 인스턴스화(누락 보완)
+oai = OpenAI(api_key=OPENAI_API_KEY)
 
 app = FastAPI(title="SafeTag Chatbot API (Function Calling)")
+
+# CORS (개발용: * / 배포 시 프론트 도메인으로 제한)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # ex) ["https://front.example.com"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 SYSTEM_PROMPT = (
     "너는 Safe Tag 앱의 AI 챗봇 '세이피'야. "
     "앱 사용법/정책/기능에 대해 간결하게 답하고, "
     "디지털 스티커 발급·인증(아파트 거주/임산부/장애인)·OTP/통화중계는 "
     "백엔드 API로 처리된다고 가정하고 절차를 안내해. 필요할 때는 제공된 도구를 호출해.\n\n"
-
     "## 아파트 거주자 인증 절차\n"
     "1. Safe Tag 앱에 로그인합니다.\n"
     "2. 인증 메뉴에서 '아파트 거주자 인증'을 선택합니다.\n"
     "3. 거주 증명서(예: 주민등록등본, 아파트 계약서 등)를 앱 내에서 업로드합니다.\n"
     "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-
     "## 임산부 인증 절차\n"
     "1. Safe Tag 앱에 로그인합니다.\n"
     "2. 인증 메뉴에서 '임산부 인증'을 선택합니다.\n"
     "3. 산모 수첩, 진단서 등 임신을 증명할 수 있는 서류를 앱 내에서 업로드합니다.\n"
     "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-
     "## 장애인 인증 절차\n"
     "1. Safe Tag 앱에 로그인합니다.\n"
     "2. 인증 메뉴에서 '장애인 인증'을 선택합니다.\n"
     "3. 장애인 등록증 또는 관련 증명서를 앱 내에서 업로드합니다.\n"
     "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-
     "## 응답 규칙\n"
     "- 한국어로 간결하게. 단계가 필요하면 1,2,3 순서로.\n"
     "- 실제 인증/발급/OTP 생성 등은 도구 호출로 처리하고, 결과를 요약해 알려줘.\n"
     "- 앱과 무관하거나 불법/위험한 요청은 정중히 거절해.\n"
 )
 
-
-# 요청/응답 모델
+# ====== 스키마 ======
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
@@ -75,8 +70,9 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     content: str
 
-# Spring 프록시 유틸
-SPRING_BASE_URL = "http://localhost:8081"
+# 스프링 프록시 유틸
+#  포트/주소는 네 스프링 실제 포트로 변경 (예: 8080)
+SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "http://localhost:8081")
 
 async def call_spring(method: str, path: str, auth: Optional[str] = None, json_body: dict | None = None):
     headers = {"Content-Type": "application/json"}
@@ -163,16 +159,13 @@ TOOLS = [
     }
 ]
 
-
-# /chat : Function Calling 적용
+# /chat : Function Calling
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, authorization: str | None = Header(default=None)):
     try:
-        # 1) 사용자 대화 + 시스템 프롬프트 구성
         msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
         msgs += [m.model_dump() for m in req.messages]
 
-        # 2) 1차 호출: 답변 or 도구 호출 결정
         comp = oai.chat.completions.create(
             model="gpt-4o-mini",
             messages=msgs,
@@ -183,11 +176,9 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         choice = comp.choices[0]
         message = choice.message
 
-        # 3) 도구 호출이 없는 일반 Q&A라면 바로 반환
-        if not message.tool_calls:
+        if not getattr(message, "tool_calls", None):
             return ChatResponse(content=message.content or "")
 
-        # 4) 도구 호출이 하나 이상이면 모두 실행
         tool_results = []
         for tc in message.tool_calls:
             name = tc.function.name
@@ -211,7 +202,6 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
                 "content": json.dumps(result, ensure_ascii=False)
             })
 
-        # 5) 도구 결과를 모델에 전달하여 자연어 응답 생성
         msgs.append(message.model_dump(exclude_none=True))
         msgs += tool_results
 
@@ -224,19 +214,18 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         content = comp2.choices[0].message.content or ""
         return ChatResponse(content=content)
 
-    
     except httpx.HTTPStatusError as he:
-        # Spring 에러를 그대로 전달(상태코드 유지)
-        raise HTTPException(status_code=he.response.status_code, detail={"error": f"SPRING_DOWN: {str(he)}"})
+        raise HTTPException(status_code=he.response.status_code,
+                            detail={"error": f"SPRING_DOWN: {str(he)}"})
     except Exception as e:
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
-
-
-# OCR 엔드포인트
+# OCR
 @app.post("/ocr")
 async def ocr(file: UploadFile):
     try:
+        # (Windows) Tesseract 설치 후 경로 필요 시 지정:
+        # pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
         img = Image.open(io.BytesIO(await file.read()))
         text = pytesseract.image_to_string(img, lang="kor+eng")
         return {"text": text}
