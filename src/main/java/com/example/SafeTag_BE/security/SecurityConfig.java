@@ -1,6 +1,7 @@
 package com.example.SafeTag_BE.security;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -18,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -28,6 +30,10 @@ public class SecurityConfig {
 
 	private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+	// application.yml의 app.allowed-origins 리스트를 읽음(없으면 빈 리스트)
+	@Value("${app.allowed-origins:}")
+	private List<String> allowedOriginsFromProp;
+
 	@Bean
 	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 		http
@@ -35,59 +41,54 @@ public class SecurityConfig {
 				.cors(cors -> {}) // 아래 corsConfigurationSource() 사용
 				.sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						// Preflight
 						.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-
-						// 문서/개발 도구
 						.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
 						.requestMatchers("/h2-console/**", "/error").permitAll()
-
-						// 공개 인증/회원 경로 (필요 시만 유지)
 						.requestMatchers("/api/auth/login", "/api/user/signup", "/api/admin/signup").permitAll()
-
-						// SafeTag 기존 공개 엔드포인트(유지 시)
 						.requestMatchers("/api/relay/**", "/c/**", "/voice/**", "/actuator/health").permitAll()
-
-						// QR/Chat 공개
-						.requestMatchers("/api/qrs/**", "/api/chat/**").permitAll()
-
-						// WebRTC 세션 발급 & ICE 설정
+						// QR: 발급/회전은 인증 필요, 그 외는 기존처럼 공개
+						.requestMatchers("/api/qrs/issue-or-rotate").authenticated()
+						.requestMatchers("/api/qrs/**").permitAll()
+						.requestMatchers("/api/chat/**").permitAll()
 						.requestMatchers("/api/calls/**", "/api/ice-config").permitAll()
-
-						// WebSocket 시그널링
 						.requestMatchers("/ws/**").permitAll()
-
-						// 그 외는 인증 필요
 						.anyRequest().authenticated()
 				)
 				.headers(headers -> headers
-						// H2 콘솔용
 						.addHeaderWriter(new XFrameOptionsHeaderWriter(XFrameOptionsHeaderWriter.XFrameOptionsMode.SAMEORIGIN))
 				)
-				// JWT 필터를 UsernamePasswordAuthenticationFilter 앞에 배치
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
 		return http.build();
 	}
 
-	// 로컬/사설망/터널을 폭넓게 허용 (운영에서는 꼭 좁히세요)
+	// CORS 설정: app.allowed-origins 사용(없으면 기본 패턴), 응답 헤더 'Expires-At' 노출
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration c = new CorsConfiguration();
-		c.setAllowedOriginPatterns(List.of(
-				"http://localhost:*",
-				"https://localhost:*",
-				"http://127.0.0.1:*",
-				"https://127.0.0.1:*",
-				"http://192.168.*:*",
-				"http://10.*:*",
-				"http://172.*:*",
-				"https://*.ngrok.io",
-				"https://*.trycloudflare.com"
-		));
-		c.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-		c.setAllowedHeaders(List.of("Authorization","Content-Type"));
-		c.setExposedHeaders(List.of("Authorization"));
+
+		List<String> origins = new ArrayList<>();
+		if (allowedOriginsFromProp != null && !allowedOriginsFromProp.isEmpty()) {
+			origins.addAll(allowedOriginsFromProp);
+			c.setAllowedOrigins(origins); // 정확 매칭
+		} else {
+			c.setAllowedOriginPatterns(List.of(
+					"http://localhost:*",
+					"https://localhost:*",
+					"http://127.0.0.1:*",
+					"https://127.0.0.1:*",
+					"http://192.168.*:*",
+					"http://10.*:*",
+					"http://172.*:*",
+					"https://*.ngrok.io",
+					"https://*.ngrok-free.app",
+					"https://*.trycloudflare.com"
+			));
+		}
+
+		c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+		c.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+		c.setExposedHeaders(List.of("Authorization", "Expires-At")); // Expires-At 노출
 		c.setAllowCredentials(true);
 
 		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
