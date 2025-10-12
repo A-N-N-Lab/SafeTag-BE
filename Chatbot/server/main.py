@@ -1,28 +1,32 @@
-from fastapi import FastAPI, HTTPException, Header, UploadFile
+from fastapi import FastAPI, HTTPException, Header, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Literal, List, Optional
 from openai import OpenAI
-import httpx, json
-from PIL import Image
-import pytesseract
-import io
-import os
+from pathlib import Path
 
+import httpx, json, os, io, uuid, datetime, tempfile
+from pdf2image import convert_from_bytes
+
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
+import pytesseract
+
+# 0) 환경설정 & OpenAI
 try:
-    from dotenv import load_dotenv  # pip install python-dotenv
+    from dotenv import load_dotenv
     load_dotenv()
 except Exception:
     pass
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
-    raise RuntimeError("OPENAI_API_KEY is not set in environment variables.")
-
-# === Added: OpenAI client 생성 ===
+    raise RuntimeError("OPENAI_API_KEY is not set.")
 oai = OpenAI(api_key=OPENAI_API_KEY)
 
+# 1) FastAPI 앱 & CORS
 app = FastAPI(title="SafeTag Chatbot API (Function Calling)")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,56 +35,93 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 2) 정적 파일 서빙 (/static)
+BASE_DIR = os.path.dirname(__file__)
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+TEMPLATE_DIR = os.path.join(STATIC_DIR, "templates")
+STICKER_OUT_DIR = os.path.join(STATIC_DIR, "stickers")
+os.makedirs(STICKER_OUT_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+def _load_font(size: int = 40) -> ImageFont.FreeTypeFont:
+    try:
+        # 프로젝트 내부 폰트 우선
+        base_dir = Path(__file__).resolve().parent
+        project_font = base_dir / "static" / "fonts" / "NotoSansKR-Regular.otf"
+        if project_font.is_file():
+            return ImageFont.truetype(str(project_font), size=size)
+
+        # OS별 기본 폰트 폴백
+        candidates = [
+            Path("/System/Library/Fonts/AppleSDGothicNeo.ttc"),  # macOS
+            Path("C:/Windows/Fonts/malgun.ttf"),                 # Windows
+            Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),  # Linux
+            Path("/usr/share/fonts/truetype/unfonts-core/UnDotum.ttf"),
+        ]
+        for p in candidates:
+            if p.is_file():
+                return ImageFont.truetype(str(p), size=size)
+
+        # 폴백 (영문 전용)
+        return ImageFont.load_default()
+
+    except Exception:
+        return ImageFont.load_default()
+
+
+TEMPLATE_BY_TYPE = {
+    "pregnant": "pregnant.png",
+    "disabled": "disabled.png",
+    "resident": "resident.png",
+}
+
+def create_sticker_image(
+    sticker_type: str,
+    issue_no: str,
+    vehicle_no: str,
+    expires_at: str,
+) -> str:
+    """
+    템플릿 위에 발급번호/차량번호/유효기간 텍스트를 합성하여 PNG 저장.
+    반환: /static/stickers/xxx.png 형태의 URL 경로
+    """
+    template_filename = TEMPLATE_BY_TYPE.get(sticker_type, "pregnant.png")
+    template_path = os.path.join(TEMPLATE_DIR, template_filename)
+    if not os.path.exists(template_path):
+        raise RuntimeError(f"Template not found: {template_path}")
+
+    img = Image.open(template_path).convert("RGBA")
+    draw = ImageDraw.Draw(img)
+    font_body = _load_font(50)
+
+    # 템플릿에 맞춰 좌표값 조정 (**좌표 수정 필요)
+    issue_xy   = (220, 420)  # 발급번호 값
+    vehicle_xy = (220, 540)  # 차량번호 값
+    expire_xy  = (220, 660)  # 유효기간 값
+
+    fill = (0, 0, 0, 255)
+    draw.text(issue_xy,   f"{issue_no}",   font=font_body, fill=fill)
+    draw.text(vehicle_xy, f"{vehicle_no}", font=font_body, fill=fill)
+    draw.text(expire_xy,  f"{expires_at}", font=font_body, fill=fill)
+
+    out_name = f"{uuid.uuid4().hex}.png"
+    out_path = os.path.join(STICKER_OUT_DIR, out_name)
+    img.save(out_path, format="PNG")
+
+    return f"/static/stickers/{out_name}"
+
+# 3) 시스템 프롬프트
 SYSTEM_PROMPT = (
     "너는 Safe Tag 앱의 AI 챗봇 '세이피'야. "
-    "앱 사용법/정책/기능에 대해 간결하게 답하고, "
-    "디지털 스티커 발급·인증(아파트 거주/임산부/장애인)·OTP/통화중계는 "
-    "백엔드 API로 처리된다고 가정하고 절차를 안내해. 필요할 때는 제공된 도구를 호출해.\n\n"
-    "## 아파트 거주자 인증 절차\n"
-    "1. Safe Tag 앱에 로그인합니다.\n"
-    "2. 인증 메뉴에서 '아파트 거주자 인증'을 선택합니다.\n"
-    "3. 거주 증명서(예: 주민등록등본, 아파트 계약서 등)를 앱 내에서 업로드합니다.\n"
-    "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-    "## 임산부 인증 절차\n"
-    "1. Safe Tag 앱에 로그인합니다.\n"
-    "2. 인증 메뉴에서 '임산부 인증'을 선택합니다.\n"
-    "3. 산모 수첩, 진단서 등 임신을 증명할 수 있는 서류를 앱 내에서 업로드합니다.\n"
-    "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-    "## 장애인 인증 절차\n"
-    "1. Safe Tag 앱에 로그인합니다.\n"
-    "2. 인증 메뉴에서 '장애인 인증'을 선택합니다.\n"
-    "3. 장애인 등록증 또는 관련 증명서를 앱 내에서 업로드합니다.\n"
-    "4. 제출한 서류가 심사됩니다. 결과는 앱 알림을 통해 확인할 수 있습니다.\n\n"
-    "## 응답 규칙\n"
-    "- 한국어로 간결하게. 단계가 필요하면 1,2,3 순서로.\n"
-    "- 실제 인증/발급/OTP 생성 등은 도구 호출로 처리하고, 결과를 요약해 알려줘.\n"
-    "- 앱과 무관하거나 불법/위험한 요청은 정중히 거절해.\n"
+    "앱 사용법/정책/기능을 간결하게 답하고, "
+    "스티커 발급·인증(거주/임산부/장애인)·OTP/통화중계는 "
+    "백엔드 API로 처리된다고 가정하고 절차를 안내해. "
+    "한국어로 단계가 필요하면 1,2,3으로 정리해. "
+    "앱과 무관하거나 위험한 요청은 정중히 거절해."
 )
 
-# 한글 → 영문 enum 정규화
-KOR_TO_ENUM = {
-    "임산부": "pregnant",
-    "임신": "pregnant",
-    "거주자": "resident",
-    "아파트": "resident",
-    "장애인": "disabled",
-    "장애": "disabled",
-}
-def normalize_type(raw: str) -> str:
-    if not raw:
-        raise ValueError("type is empty")
-    s = str(raw).strip().lower()
-    if s in ("pregnant", "resident", "disabled"):
-        return s
-    for k, v in KOR_TO_ENUM.items():
-        if k in raw:
-            return v
-    if "preg" in s: return "pregnant"
-    if "resi" in s or "apart" in s: return "resident"
-    if "disab" in s: return "disabled"
-    raise ValueError(f"unsupported type: {raw}")
-
-# 요청/응답 모델
+# 4) DTO (요청/응답)
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
@@ -91,15 +132,16 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     content: str
 
-# Spring 프록시 유틸
-SPRING_BASE_URL = "http://localhost:8081"
+# 5) Spring 프록시 유틸
+SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "http://localhost:8080")
 
 async def call_spring(method: str, path: str, auth: Optional[str] = None, json_body: dict | None = None):
     headers = {"Content-Type": "application/json"}
     if auth:
         headers["Authorization"] = auth
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.request(method, f"{SPRING_BASE_URL}{path}", headers=headers, json=json_body)
+    url = f"{SPRING_BASE_URL}{path}"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        r = await client.request(method, url, headers=headers, json=json_body)
         r.raise_for_status()
         return r.json()
 
@@ -118,24 +160,13 @@ async def issue_sticker(vehicle_number: str, sticker_type: str, valid_days: int 
 async def issue_otp(user_id: int, auth: Optional[str] = None):
     return await call_spring("POST", "/api/otp/issue", auth, {"userId": user_id})
 
-# 정규화 적용 래퍼(원본은 보존)
-_start_verification_raw = start_verification
-async def start_verification(type_: str, file_id: str, auth: Optional[str] = None):
-    t = normalize_type(type_)
-    return await _start_verification_raw(t, file_id, auth)
-
-_issue_sticker_raw = issue_sticker
-async def issue_sticker(vehicle_number: str, sticker_type: str, valid_days: int | None = None, auth: Optional[str] = None):
-    st = normalize_type(sticker_type)
-    return await _issue_sticker_raw(vehicle_number, st, valid_days, auth)
-
-# OpenAI Tools(Function) 스키마
+# 6) OpenAI Tools (Function Calling)
 TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "start_verification",
-            "description": "서류 인증 시작(아파트 거주/임산부/장애인). 업로드된 파일 ID 필요.",
+            "description": "서류 인증 시작(아파트 거주/임산부/장애인). 업로드된 fileId 필요.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -188,15 +219,43 @@ TOOLS = [
     }
 ]
 
-# /chat : Function Calling 적용
+# 7) 유틸: 타입 정규화 / OCR 타입 추정
+def normalize_type(raw: str) -> Optional[str]:
+    if not raw:
+        return None
+    t = raw.strip().lower()
+    if t in ("임산부", "임신", "preg", "pregnant"):
+        return "pregnant"
+    if t in ("장애", "장애인", "disabled", "disability"):
+        return "disabled"
+    if t in ("거주", "거주자", "아파트", "resident", "residence", "apart"):
+        return "resident"
+    return None
+
+def guess_type_from_text(text: str) -> Optional[str]:
+    if not text:
+        return None
+    # 한글 우선
+    if "임산부" in text or "임신" in text:
+        return "pregnant"
+    if "장애인" in text or "장애" in text:
+        return "disabled"
+    if "아파트" in text or "거주" in text or "입주" in text:
+        return "resident"
+    # 영어 백업
+    t = text.lower()
+    if "preg" in t: return "pregnant"
+    if "disab" in t: return "disabled"
+    if "resi" in t or "apart" in t: return "resident"
+    return None
+
+# 8) /chat : Function Calling
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, authorization: str | None = Header(default=None)):
     try:
-        # 1) 사용자 대화 + 시스템 프롬프트 구성
         msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
         msgs += [m.model_dump() for m in req.messages]
 
-        # 2) 1차 호출: 답변 or 도구 호출 결정
         comp = oai.chat.completions.create(
             model="gpt-4o-mini",
             messages=msgs,
@@ -207,11 +266,11 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         choice = comp.choices[0]
         message = choice.message
 
-        # 3) 도구 호출이 없는 일반 Q&A라면 바로 반환
-        if not message.tool_calls:
+        # 도구 호출 없음 → 일반 Q&A
+        if not getattr(message, "tool_calls", None):
             return ChatResponse(content=message.content or "")
 
-        # 4) 도구 호출이 하나 이상이면 모두 실행
+        # 도구 호출 처리
         tool_results = []
         for tc in message.tool_calls:
             name = tc.function.name
@@ -235,7 +294,6 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
                 "content": json.dumps(result, ensure_ascii=False)
             })
 
-        # 5) 도구 결과를 모델에 전달하여 자연어 응답 생성
         msgs.append(message.model_dump(exclude_none=True))
         msgs += tool_results
 
@@ -249,55 +307,121 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         return ChatResponse(content=content)
 
     except httpx.HTTPStatusError as he:
-        # Spring 에러를 그대로 전달(상태코드 유지)
         raise HTTPException(status_code=he.response.status_code, detail={"error": f"SPRING_DOWN: {str(he)}"})
     except Exception as e:
         raise HTTPException(status_code=500, detail={"error": str(e)})
 
-    
-# OCR 엔드포인트
+# 9) OCR (PNG/JPG/PDF)
 @app.post("/ocr")
 async def ocr(file: UploadFile):
     try:
-        img = Image.open(io.BytesIO(await file.read()))
-        # 전처리 없이 가동. 필요 시 그레이스케일/이진화 추가 가능
-        text = pytesseract.image_to_string(img, lang="kor+eng")
-        return {"text": text}
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=422, detail="업로드된 파일이 비어 있습니다.")
+
+        images = []
+
+        # PDF → 이미지 변환
+        if (file.content_type and "pdf" in file.content_type.lower()) or file.filename.lower().endswith(".pdf"):
+            images = convert_from_bytes(raw, dpi=300, fmt="png")
+
+        # 이미지 파일은 임시 파일로 저장 후 열기(헤더/포인터 문제 회피)
+        else:
+            suffix = os.path.splitext(file.filename)[1] or ".bin"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+            try:
+                img = Image.open(tmp_path)
+                img.load()
+                images = [img]
+            except UnidentifiedImageError:
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"이미지 형식을 인식할 수 없습니다. filename={file.filename}, content_type={file.content_type}"
+                )
+            finally:
+                try:
+                    os.remove(tmp_path)
+                except Exception:
+                    pass
+
+        # OCR (간단 전처리)
+        texts = []
+        for img in images:
+            g = img.convert("L")
+            texts.append(pytesseract.image_to_string(g, lang="kor+eng"))
+
+        return {"text": "\n".join(texts)}
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR 실패: {e}")
 
 
-# OCR + 자동 스티커 발급 엔드포인트
+# 10) OCR → 검증 → 스티커 발급(+이미지 생성)
 @app.post("/ocr/sticker")
-async def ocr_and_issue(file: UploadFile, authorization: str | None = Header(default=None)):
+async def ocr_and_issue(
+    file: UploadFile,
+    authorization: str | None = Header(default=None),
+    vehicleNumber: str | None = Form(default="12가3456"),
+    validDays: int | None = Form(default=30),
+):
+    """
+    파일 업로드 → OCR → 임산부/장애인/거주 단어 검증 → 조건 충족 시 스티커 발급
+    성공 시 스티커 이미지 PNG를 생성하고 URL 반환
+    """
     try:
-        # 1) OCR 처리
-        img = Image.open(io.BytesIO(await file.read()))
-        text = pytesseract.image_to_string(img, lang="kor+eng")
-        text = text.strip()
-        
-        # 2) 유형 판별
-        sticker_type = None
-        if "임산부" in text:
-            sticker_type = "pregnant"
-        elif "장애인" in text:
-            sticker_type = "disabled"
-        elif "아파트" in text or "거주" in text:
-            sticker_type = "resident"
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=422, detail="업로드된 파일이 비어 있습니다.")
 
-        # 3) 조건 충족 여부 확인
+        # PDF or IMAGE 로딩
+        if (file.content_type and "pdf" in file.content_type.lower()) or file.filename.lower().endswith(".pdf"):
+            pages = convert_from_bytes(raw, dpi=300, fmt="png")
+        else:
+            suffix = os.path.splitext(file.filename)[1] or ".bin"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                tmp.write(raw)
+                tmp_path = tmp.name
+            try:
+                img = Image.open(tmp_path); img.load()
+                pages = [img]
+            except UnidentifiedImageError:
+                raise HTTPException(status_code=415, detail="이미지 형식을 인식할 수 없습니다.")
+            finally:
+                try: os.remove(tmp_path)
+                except Exception: pass
+
+        # OCR
+        ocr_texts = []
+        for img in pages:
+            g = img.convert("L")
+            ocr_texts.append(pytesseract.image_to_string(g, lang="kor+eng").strip())
+        text = "\n".join(ocr_texts)
+
+        # 유형 판별 → 실패 시 종료
+        sticker_type = guess_type_from_text(text)
         if not sticker_type:
-            return {"status": "FAILED", "reason": "인증에 실패하였습니다. 다시 시도해 주세요.", "ocrText": text}
-        
-        # 4) 스티커 발급 (임시 차량번호: 'TEST-1234')
-        result = await issue_sticker("TEST-1234", sticker_type, 30, authorization)
+            return {"status": "FAILED", "reason": "서류에서 인증 단어를 찾지 못했습니다.", "ocrText": text}
+
+        # 발급 + 이미지 생성
+        issue_res = await issue_sticker(vehicleNumber or "12가3456", sticker_type, validDays or 30, authorization)
+        issue_no = str(issue_res.get("stickerId", "")) or uuid.uuid4().hex[:8]
+        expires  = issue_res.get("expiresAt") or (datetime.date.today() + datetime.timedelta(days=validDays or 30)).isoformat()
+        sticker_img_url = create_sticker_image(sticker_type, issue_no, vehicleNumber or "12가3456", expires)
 
         return {
             "status": "SUCCESS",
             "stickerType": sticker_type,
             "ocrText": text,
-            "result": result
+            "result": issue_res,
+            "stickerImageUrl": sticker_img_url
         }
 
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR+스티커 발급 실패: {e}")
