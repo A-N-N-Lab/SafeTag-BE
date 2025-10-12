@@ -5,6 +5,7 @@ import com.example.SafeTag_BE.dto.VerifyStartResponseDto;
 import com.example.SafeTag_BE.dto.VerifyStatusResponseDto;
 import com.example.SafeTag_BE.security.SecurityUtil;
 import com.example.SafeTag_BE.service.VerificationService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/verify")
+@Tag(name = "verification-controller", description = "인증서류 심사 및 승인/반려 관련 API")
 public class VerificationController {
 
     private final VerificationService verificationService;

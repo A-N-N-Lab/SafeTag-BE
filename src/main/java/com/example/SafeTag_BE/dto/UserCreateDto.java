@@ -1,5 +1,6 @@
 package com.example.SafeTag_BE.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -38,4 +39,13 @@ public class UserCreateDto {
 
     @NotEmpty(message = "필수항목입니다.")
     private String address;
+
+    @Schema(description = "차량번호", example = "12가3456")
+    @NotEmpty(message = "차량번호는 필수항목입니다.")
+    @Pattern(
+            regexp = "^[0-9]{2,3}[가-힣][0-9]{4}$|^[가-힣]{2}[0-9]{2}[가-힣][0-9]{4}$",
+            message = "차량번호 형식이 올바르지 않습니다. 예) 12가3456, 서울12가3456"
+    )
+    private String vehicleNumber;
+
 }

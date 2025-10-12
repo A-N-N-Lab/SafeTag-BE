@@ -1,8 +1,8 @@
 package com.example.SafeTag_BE.service;
 
-import com.example.SafeTag_BE.domain.VerificationStatus;
-import com.example.SafeTag_BE.domain.VerificationType;
 import com.example.SafeTag_BE.entity.Verification;
+import com.example.SafeTag_BE.enums.VerificationStatus;
+import com.example.SafeTag_BE.enums.VerificationType;
 import com.example.SafeTag_BE.exception.ApiException;
 import com.example.SafeTag_BE.repository.UserRepository;
 import com.example.SafeTag_BE.repository.VerificationRepository;

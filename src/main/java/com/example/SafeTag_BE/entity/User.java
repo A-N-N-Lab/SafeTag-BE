@@ -34,6 +34,9 @@ public class User {
     @Column(nullable = false)
     private String address;
 
+    @Column(nullable = true, unique = true)
+    private String vehicleNumber;
+
     public String getRole() {
         return "ROLE_USER";
     }

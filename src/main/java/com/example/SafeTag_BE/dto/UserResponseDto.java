@@ -15,4 +15,5 @@ public class UserResponseDto {
     private LocalDate birthDate;
     private String gender;
     private String address;
+    private String vehicleNumber;
 }
