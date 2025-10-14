@@ -1,7 +1,7 @@
 package com.example.SafeTag_BE.entity;
 
-import com.example.SafeTag_BE.domain.VerificationStatus;
-import com.example.SafeTag_BE.domain.VerificationType;
+import com.example.SafeTag_BE.enums.VerificationStatus;
+import com.example.SafeTag_BE.enums.VerificationType;
 import jakarta.persistence.*;
 import lombok.*;
 

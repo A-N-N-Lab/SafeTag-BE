@@ -44,7 +44,8 @@ public class UserController {
                     userCreateDto.getPhoneNum(),
                     userCreateDto.getBirthDate(),
                     userCreateDto.getGender(),
-                    userCreateDto.getAddress()
+                    userCreateDto.getAddress(),
+                    userCreateDto.getVehicleNumber()
             );
             return ResponseEntity.ok("회원가입 성공");
         } catch (DataIntegrityViolationException e) {
@@ -74,7 +75,8 @@ public class UserController {
                 user.getPhoneNum(),
                 user.getBirthDate(),
                 user.getGender(),
-                user.getAddress()
+                user.getAddress(),
+                user.getVehicleNumber()
         );
 
         return ResponseEntity.ok(userResponse);

@@ -48,6 +48,9 @@ dependencies {
 	compileOnly 'org.projectlombok:lombok:1.18.32'
 	annotationProcessor 'org.projectlombok:lombok:1.18.32'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+	implementation 'com.google.firebase:firebase-admin:9.2.0'
+
 }
 
 tasks.withType(Test).configureEach {

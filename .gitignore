@@ -62,3 +62,5 @@ __pycache__/
 *.pyo
 *.env
 Chatbot/.env
+
+src/main/resources/firebase/safetag-firebase.json

@@ -3,6 +3,7 @@ package com.example.SafeTag_BE.controller;
 import com.example.SafeTag_BE.dto.StickerIssueRequestDto;
 import com.example.SafeTag_BE.dto.StickerIssueResponseDto;
 import com.example.SafeTag_BE.store.InMemoryStore;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -12,6 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/api/sticker")
+@Tag(name ="sticker-controller",description = "스티커 관련 API (거주민·임산부·장애인 인증 스티커 발급 )")
 public class StickerController {
 
     private static final AtomicLong SEQ = new AtomicLong(1); // 데모용 Long ID 시퀀스

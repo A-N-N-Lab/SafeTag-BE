@@ -1,6 +1,6 @@
 package com.example.SafeTag_BE.dto;
 
-import com.example.SafeTag_BE.domain.VerificationType;
+import com.example.SafeTag_BE.enums.VerificationType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotBlank;

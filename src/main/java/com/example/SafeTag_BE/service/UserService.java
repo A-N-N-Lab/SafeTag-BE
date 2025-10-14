@@ -20,7 +20,10 @@ public class UserService {
     // 회원가입
     public User create(String name, String username, String password,
                        String phoneNum, LocalDate birthDate,
-                       String gender, String address) {
+                       String gender, String address, String vehicleNumber) {
+        if (vehicleNumber == null || vehicleNumber.isBlank()) {
+            throw new IllegalArgumentException("차량번호는 필수입니다.");
+        }
         User user = new User();
         user.setName(name);
         user.setUsername(username);
@@ -29,6 +32,7 @@ public class UserService {
         user.setBirthDate(birthDate);
         user.setGender(gender);
         user.setAddress(address);
+        user.setVehicleNumber(vehicleNumber.trim());
         //user.setRole(RoleConstants.ROLE_USER); // 권한 설정
         return userRepository.save(user);
     }
@@ -77,6 +81,13 @@ public class UserService {
     public void deleteUser(Long id) {
         User user = getUser(id); // 존재하지 않으면 예외 발생
         userRepository.deleteById(id);
+    }
+
+    public void updateFcmToken(Long userId, String token) {
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setFcmToken(token);
+            userRepository.save(user);
+        });
     }
 
 }
