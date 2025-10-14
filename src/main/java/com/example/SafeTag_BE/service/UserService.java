@@ -83,4 +83,11 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
+    public void updateFcmToken(Long userId, String token) {
+        userRepository.findById(userId).ifPresent(user -> {
+            user.setFcmToken(token);
+            userRepository.save(user);
+        });
+    }
+
 }

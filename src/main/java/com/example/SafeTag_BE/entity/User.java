@@ -37,6 +37,9 @@ public class User {
     @Column(nullable = true, unique = true)
     private String vehicleNumber;
 
+    @Column(nullable = true, length = 500)
+    private String fcmToken;
+
     public String getRole() {
         return "ROLE_USER";
     }
