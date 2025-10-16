@@ -57,8 +57,27 @@ public class SecurityConfig {
 						// WebSocket 시그널링
 						.requestMatchers("/ws/**").permitAll()
 
+						// 스티커 발급: 인증만 요구
+						.requestMatchers(org.springframework.http.HttpMethod.POST, "/api/sticker/issue").authenticated()
+
+						// 마이페이지: USER/ADMIN 모두 허용
+						.requestMatchers("/api/mypage/**").hasAnyRole("USER", "ADMIN")
+
 						// 그 외는 인증 필요
 						.anyRequest().authenticated()
+				)
+				// 401/403 을 명확한 JSON으로 내려서 원인 파악 쉽게
+				.exceptionHandling(ex -> ex
+						.authenticationEntryPoint((req, res, e) -> {
+							res.setStatus(401);
+							res.setContentType("application/json;charset=UTF-8");
+							res.getWriter().write("{\"error\":\"unauthorized\",\"message\":\"" + e.getMessage() + "\"}");
+						})
+						.accessDeniedHandler((req, res, e) -> {
+							res.setStatus(403);
+							res.setContentType("application/json;charset=UTF-8");
+							res.getWriter().write("{\"error\":\"forbidden\",\"message\":\"" + e.getMessage() + "\"}");
+						})
 				)
 				.headers(headers -> headers
 						// H2 콘솔용

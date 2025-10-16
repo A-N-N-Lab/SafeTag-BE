@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -44,45 +46,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
+                                    HttpServletResponse response,
+                                    FilterChain filterChain)
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
+        log.debug("[JWT] URI={}, AuthorizationPresent={}", request.getRequestURI(), header != null);
 
         try {
             if (header != null && header.startsWith("Bearer ")) {
                 String token = header.substring(7);
+                log.debug("[JWT] token.prefix={}", token.length() > 12 ? token.substring(0, 12) : token);
 
-                if (jwtTokenProvider.validateToken(token)) {
+                boolean valid = jwtTokenProvider.validateToken(token);
+                if (!valid) {
+                    log.warn("[JWT] validateToken=false (토큰은 들어왔지만 유효성 검사 실패)");
+                } else {
                     Long userId = jwtTokenProvider.getUserIdFromToken(token);
                     String role = jwtTokenProvider.getRoleFromToken(token);
                     String uname = jwtTokenProvider.getUsernameFromToken(token);
+                    log.debug("[JWT] validated userId={}, role={}, uname={}", userId, role, uname);
 
                     UserDetails delegate = userSecurityService.loadUserById(userId);
-
-                    AuthPrincipal principal = new AuthPrincipal(
-                            userId,
-                            (uname != null ? uname : delegate.getUsername()),
-                            role,
-                            delegate
-                    );
+                    var principal = new AuthPrincipal(userId, (uname != null ? uname : delegate.getUsername()), role, delegate);
 
                     var authToken = new UsernamePasswordAuthenticationToken(
-                            principal,
-                            null,
-                            List.of(new SimpleGrantedAuthority(role))
+                            principal, null, List.of(new SimpleGrantedAuthority(role))
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
+            } else {
+                log.debug("[JWT] Authorization 헤더 없음 또는 Bearer 접두사 없음");
             }
-        } catch (Exception ignore) {
-            // 토큰 파싱/검증 실패 시에도 예외 던지지 않음 (permitAll 경로 보호)
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("[JWT] expired: {}", e.getMessage());
+            throw e; // → 401
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+            log.warn("[JWT] invalid: {}", e.getMessage());
+            throw e; // → 401/403 (설정에 따름)
+        } catch (Exception e) {
+            log.warn("[JWT] unexpected error: {}", e.toString());
         }
 
         filterChain.doFilter(request, response);
     }
+
 
     // 사용자 정보 래퍼 (필요 시 그대로 유지)
     private static final class AuthPrincipal implements org.springframework.security.core.userdetails.UserDetails {
