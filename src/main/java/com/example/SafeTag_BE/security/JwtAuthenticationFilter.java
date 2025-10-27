@@ -1,3 +1,117 @@
+//package com.example.SafeTag_BE.security;
+//
+//import com.example.SafeTag_BE.service.UserSecurityService;
+//import jakarta.servlet.FilterChain;
+//import jakarta.servlet.ServletException;
+//import jakarta.servlet.http.HttpServletRequest;
+//import jakarta.servlet.http.HttpServletResponse;
+//import lombok.RequiredArgsConstructor;
+//import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+//import org.springframework.security.core.GrantedAuthority;
+//import org.springframework.security.core.authority.SimpleGrantedAuthority;
+//import org.springframework.security.core.context.SecurityContextHolder;
+//import org.springframework.security.core.userdetails.UserDetails;
+//import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+//import org.springframework.stereotype.Component;
+//import org.springframework.web.filter.OncePerRequestFilter;
+//
+//import java.io.IOException;
+//import java.util.Collection;
+//import java.util.List;
+//
+//@RequiredArgsConstructor
+//@Component
+//public class JwtAuthenticationFilter extends OncePerRequestFilter {
+//
+//    private final JwtTokenProvider jwtTokenProvider;
+//    private final UserSecurityService userSecurityService;
+//
+//    // Swagger/H2/공개 경로는 필터 자체를 건너뛰게 함
+//    @Override
+//    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+//        String uri = request.getRequestURI();
+//        return uri.startsWith("/v3/api-docs")
+//                || uri.startsWith("/swagger-ui")
+//                || uri.startsWith("/swagger-ui.html")
+//                || uri.startsWith("/h2-console")
+//                || uri.startsWith("/api/auth") // 추가해놓음 혹몰
+//                || uri.startsWith("/api/qrs")
+//                || uri.startsWith("/api/chat")
+//                || uri.startsWith("/api/calls")
+//                || uri.startsWith("/api/ice-config")
+//                || uri.startsWith("/ws")
+//                || "OPTIONS".equalsIgnoreCase(request.getMethod());
+//    }
+//
+//    @Override
+//    protected void doFilterInternal(HttpServletRequest request,
+//            HttpServletResponse response,
+//            FilterChain filterChain)
+//            throws ServletException, IOException {
+//
+//        String header = request.getHeader("Authorization");
+//
+//        try {
+//            if (header != null && header.startsWith("Bearer ")) {
+//                String token = header.substring(7);
+//
+//                if (jwtTokenProvider.validateToken(token)) {
+//                    Long userId = jwtTokenProvider.getUserIdFromToken(token);
+//                    String role = jwtTokenProvider.getRoleFromToken(token);
+//                    String uname = jwtTokenProvider.getUsernameFromToken(token);
+//
+//                    UserDetails delegate = userSecurityService.loadUserById(userId);
+//
+//                    AuthPrincipal principal = new AuthPrincipal(
+//                            userId,
+//                            (uname != null ? uname : delegate.getUsername()),
+//                            role,
+//                            delegate
+//                    );
+//
+//                    var authToken = new UsernamePasswordAuthenticationToken(
+//                            principal,
+//                            null,
+//                            List.of(new SimpleGrantedAuthority(role))
+//                    );
+//                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+//                    SecurityContextHolder.getContext().setAuthentication(authToken);
+//                }
+//            }
+//        } catch (Exception ignore) {
+//            // 토큰 파싱/검증 실패 시에도 예외 던지지 않음 (permitAll 경로 보호)
+//        }
+//
+//        filterChain.doFilter(request, response);
+//    }
+//
+//    // 사용자 정보 래퍼 (필요 시 그대로 유지)
+//    private static final class AuthPrincipal implements org.springframework.security.core.userdetails.UserDetails {
+//        private final Long id;
+//        private final String username;
+//        private final String role;
+//        private final UserDetails delegate;
+//
+//        private AuthPrincipal(Long id, String username, String role, UserDetails delegate) {
+//            this.id = id;
+//            this.username = username;
+//            this.role = role;
+//            this.delegate = delegate;
+//        }
+//
+//        public Long getId() { return id; }
+//        public String getRole() { return role; }
+//
+//        @Override public String getPassword() { return delegate.getPassword(); }
+//        @Override public String getUsername() { return (username != null ? username : delegate.getUsername()); }
+//        @Override public boolean isAccountNonExpired()  { return delegate.isAccountNonExpired(); }
+//        @Override public boolean isAccountNonLocked()   { return delegate.isAccountNonLocked(); }
+//        @Override public boolean isCredentialsNonExpired(){ return delegate.isCredentialsNonExpired(); }
+//        @Override public boolean isEnabled()             { return delegate.isEnabled(); }
+//        @Override public Collection<? extends GrantedAuthority> getAuthorities() { return delegate.getAuthorities(); }
+//    }
+//}
+
 package com.example.SafeTag_BE.security;
 
 import com.example.SafeTag_BE.service.UserSecurityService;
@@ -6,6 +120,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -19,6 +134,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -26,7 +142,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserSecurityService userSecurityService;
 
-    // Swagger/H2/공개 경로는 필터 자체를 건너뛰게 함
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String uri = request.getRequestURI();
@@ -34,6 +149,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 || uri.startsWith("/swagger-ui")
                 || uri.startsWith("/swagger-ui.html")
                 || uri.startsWith("/h2-console")
+                || uri.startsWith("/api/auth")     // 로그인/회원가입 공개
                 || uri.startsWith("/api/qrs")
                 || uri.startsWith("/api/chat")
                 || uri.startsWith("/api/calls")
@@ -49,42 +165,46 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
+        log.debug("[JWT] URI={}, AuthorizationPresent={}", request.getRequestURI(), header != null);
 
         try {
             if (header != null && header.startsWith("Bearer ")) {
                 String token = header.substring(7);
+                log.debug("[JWT] token.prefix={}", token.length() > 12 ? token.substring(0, 12) : token);
 
                 if (jwtTokenProvider.validateToken(token)) {
                     Long userId = jwtTokenProvider.getUserIdFromToken(token);
                     String role = jwtTokenProvider.getRoleFromToken(token);
                     String uname = jwtTokenProvider.getUsernameFromToken(token);
+                    log.debug("[JWT] validated userId={}, role={}, uname={}", userId, role, uname);
 
                     UserDetails delegate = userSecurityService.loadUserById(userId);
-
-                    AuthPrincipal principal = new AuthPrincipal(
-                            userId,
-                            (uname != null ? uname : delegate.getUsername()),
-                            role,
-                            delegate
-                    );
+                    var principal = new AuthPrincipal(userId, (uname != null ? uname : delegate.getUsername()), role, delegate);
 
                     var authToken = new UsernamePasswordAuthenticationToken(
-                            principal,
-                            null,
-                            List.of(new SimpleGrantedAuthority(role))
+                            principal, null, List.of(new SimpleGrantedAuthority(role))
                     );
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     SecurityContextHolder.getContext().setAuthentication(authToken);
+                } else {
+                    log.warn("[JWT] validateToken=false");
                 }
+            } else {
+                log.debug("[JWT] Authorization header missing or not Bearer");
             }
-        } catch (Exception ignore) {
-            // 토큰 파싱/검증 실패 시에도 예외 던지지 않음 (permitAll 경로 보호)
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.warn("[JWT] expired: {}", e.getMessage());
+            throw e;
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+            log.warn("[JWT] invalid: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.warn("[JWT] unexpected error: {}", e.toString());
         }
 
         filterChain.doFilter(request, response);
     }
 
-    // 사용자 정보 래퍼 (필요 시 그대로 유지)
     private static final class AuthPrincipal implements org.springframework.security.core.userdetails.UserDetails {
         private final Long id;
         private final String username;
@@ -107,6 +227,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         @Override public boolean isAccountNonLocked()   { return delegate.isAccountNonLocked(); }
         @Override public boolean isCredentialsNonExpired(){ return delegate.isCredentialsNonExpired(); }
         @Override public boolean isEnabled()             { return delegate.isEnabled(); }
-        @Override public Collection<? extends GrantedAuthority> getAuthorities() { return delegate.getAuthorities(); }
+        @Override public Collection<? extends org.springframework.security.core.GrantedAuthority> getAuthorities() { return delegate.getAuthorities(); }
     }
 }

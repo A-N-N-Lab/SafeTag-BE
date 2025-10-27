@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import com.example.SafeTag_BE.service.FcmService;
+import com.google.firebase.messaging.FirebaseMessagingException;
 
 import java.time.Instant;
 
@@ -19,6 +21,7 @@ public class CallApiController {
 
     private final DynamicQRRepository dynamicQRRepository;
     private final CallSessionService callSessionService;
+    private final FcmService fcmService;
 
     public record StartReq(String qrUuid, Long callerUserId) {}
     public record StartRes(String sessionId, long ttlSeconds) {}
@@ -40,7 +43,17 @@ public class CallApiController {
         if (cs.getExpiresAt() != null) {
             ttl = Math.max(0, cs.getExpiresAt().getEpochSecond() - Instant.now().getEpochSecond());
         }
-        log.info("WebRTC session created: qrUuid={}, sessionId={}, ttl={}", req.qrUuid(), cs.getSessionUuid(), ttl);
+
+        // 여기서 푸시
+        try {
+            var token = user.getFcmToken(); // 차주 토큰
+            fcmService.sendCallRequest(token, user.getName(), cs.getSessionUuid());
+            log.info("[CALL] push sent: user={}, sessionId={}", user.getUsername(), cs.getSessionUuid());
+        } catch (FirebaseMessagingException e) {
+            log.warn("[CALL] push failed: {}", e.getMessage());
+
+        }
+
         return ResponseEntity.ok(new StartRes(cs.getSessionUuid(), ttl));
     }
 }
