@@ -3,6 +3,7 @@ package com.example.SafeTag_BE.service;
 import com.example.SafeTag_BE.entity.User;
 import com.example.SafeTag_BE.exception.ApiException;
 import com.example.SafeTag_BE.repository.UserRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,7 +33,7 @@ public class UserService {
         user.setBirthDate(birthDate);
         user.setGender(gender);
         user.setAddress(address);
-        user.setVehicleNumber(vehicleNumber.trim());
+        user.setCarNumber(vehicleNumber.trim());
         //user.setRole(RoleConstants.ROLE_USER); // 권한 설정
         return userRepository.save(user);
     }
@@ -83,11 +84,11 @@ public class UserService {
         userRepository.deleteById(id);
     }
 
-    public void updateFcmToken(Long userId, String token) {
-        userRepository.findById(userId).ifPresent(user -> {
-            user.setFcmToken(token);
-            userRepository.save(user);
-        });
+    @Transactional
+    public void updateFcmToken(Long userId, String fcmToken) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        user.setFcmToken(fcmToken);
     }
 
 }

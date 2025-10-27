@@ -25,6 +25,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
                         "http://10.*:*",
                         "http://172.*:*",
                         "https://*.ngrok.io",
+                        "https://*.ngrok.app",
+                        "https://*.ngrok-free.app",
+                        "https://*.ngrok-free.dev",
                         "https://*.trycloudflare.com",
                         "http://localhost:5173"
                 );

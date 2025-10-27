@@ -1,5 +1,6 @@
 package com.example.SafeTag_BE.controller;
 
+import com.example.SafeTag_BE.dto.FcmTokenRequest;
 import com.example.SafeTag_BE.dto.UserCreateDto;
 import com.example.SafeTag_BE.dto.UserResponseDto;
 import com.example.SafeTag_BE.entity.User;
@@ -9,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.apache.coyote.Response;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -27,7 +29,7 @@ public class UserController {
     @PostMapping("/signup")
     @Operation(summary = "회원가입", description = "사용자 정보를 받아 회원가입합니다.")
     public ResponseEntity<?> signup(@Valid @RequestBody UserCreateDto userCreateDto,
-                                    BindingResult bindingResult) {
+            BindingResult bindingResult) {
         if (bindingResult.hasErrors()) {
             return ResponseEntity.badRequest().body("유효성 검사 실패");
         }
@@ -76,7 +78,7 @@ public class UserController {
                 user.getBirthDate(),
                 user.getGender(),
                 user.getAddress(),
-                user.getVehicleNumber()
+                user.getCarNumber()
         );
 
         return ResponseEntity.ok(userResponse);
@@ -101,4 +103,45 @@ public class UserController {
             return ResponseEntity.badRequest().body("회원탈퇴 실패: " + e.getMessage());
         }
     }
+
+//    @PostMapping("/me/fcm-token")
+//    @Operation(summary = "FCM 토큰 저장", description = "현재 로그인한 사용자의 FCM토큰을 저장합니다.")
+//    public ResponseEntity<?> saveFcmToken(
+//            @RequestHeader("Authorization") String tokenHeader,
+//            @RequestBody FcmTokenRequest req
+//    ) {
+//        String token = tokenHeader.replace("Bearer", "");
+//        String role = jwtTokenProvider.getRoleFromToken(token);
+//        Long userId = jwtTokenProvider.getUserIdFromToken(token);
+//        if (!"ROLE_USER".equals(role)) {
+//            return ResponseEntity.badRequest().body("사용자만 등록 가능합니다.");
+//        }
+//        if (req.getFcmToken() == null || req.getFcmToken().isBlank()) {
+//            return ResponseEntity.badRequest().body("fcmToken is required");
+//        }
+//
+//        userService.updateFcmToken(userId, req.getFcmToken());
+//        return ResponseEntity.ok("ok");
+//    }
+@PostMapping("/me/fcm-token")
+public ResponseEntity<?> saveFcmToken(
+        @RequestHeader("Authorization") String tokenHeader,
+        @RequestBody FcmTokenRequest req
+) {
+    String token = tokenHeader.startsWith("Bearer ") ? tokenHeader.substring(7) : tokenHeader;
+    token = token.trim();
+    String role = jwtTokenProvider.getRoleFromToken(token);
+    Long userId = jwtTokenProvider.getUserIdFromToken(token);
+
+    if (!"ROLE_USER".equals(role)) {
+        return ResponseEntity.badRequest().body("사용자만 등록 가능합니다.");
+    }
+    if (req.getFcmToken() == null || req.getFcmToken().isBlank()) {
+        return ResponseEntity.badRequest().body("fcmToken is required");
+    }
+
+    userService.updateFcmToken(userId, req.getFcmToken());
+    return ResponseEntity.ok("ok");
+}
+
 }

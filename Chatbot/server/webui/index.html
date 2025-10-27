@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>safetag chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: ui-sans-serif, system-ui; margin: 0; background:#f5f7fb; }
+    .wrap { max-width: 420px; margin: 0 auto; min-height: 100dvh; background:#fff; padding:16px; box-sizing:border-box; }
+    button { padding:10px 14px; border-radius:8px; border:1px solid #ddd; background:#1c6bff; color:#fff; font-weight:700; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h3>safetag chatbot</h3>
+  <p>여기서 실제 챗봇 UI가 들어갑니다.</p>
+
+  <!-- 발급 시나리오 테스트용 버튼 -->
+  <button id="issue">발급 완료 postMessage 보내기</button>
+</div>
+
+<script>
+  document.getElementById('issue').onclick = () => {
+    const payload = {
+      stickerId: "DEMO-1234",
+      type: "PREGNANT",
+      carNumber: "12가 3456",
+      issuedAt: new Date().toISOString(),
+      expiresAt: null,
+      imageUrl: "/Sticker.png",
+      issuer: "SAFETAG"
+    };
+    // 부모창(프론트)이 ChatbotLauncher에서 이걸 받습니다
+    window.opener?.postMessage({ type: "STICKER_ISSUED", payload }, "*");
+    alert("전송 완료! (부모창으로 postMessage)");
+  };
+</script>
+</body>
+</html>

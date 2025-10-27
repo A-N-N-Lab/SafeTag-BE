@@ -35,12 +35,14 @@ public class User {
     private String address;
 
     @Column(nullable = true, unique = true)
-    private String vehicleNumber;
+    private String carNumber;
 
-    @Column(nullable = true, length = 500)
+    @Column(name = "fcm_token", length = 512)
     private String fcmToken;
 
     public String getRole() {
         return "ROLE_USER";
     }
+    public String getFcmToken() { return fcmToken; }
+    public void setFcmToken(String fcmToken) { this.fcmToken = fcmToken; }
 }
